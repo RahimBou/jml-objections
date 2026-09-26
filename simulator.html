@@ -22,30 +22,42 @@ function addTranscript(who,text){transcript.push({who,text});addBubble(who,text)
 async function start(){
   const authToken=localStorage.getItem("jml_token");
   if(!authToken){$("status").textContent="🔐 Crée ou ouvre ton compte pour utiliser le simulateur IA.";return;}
-  $("start").disabled=true;$("stop").disabled=false;$("status").textContent="Connexion au coach IA…";$("chat").innerHTML="";startedAt=Date.now();
+  $("start").disabled=true;$("stop").disabled=false;$("status").textContent="Connexion au coach IA…";$("chat").innerHTML="";transcript=[];startedAt=Date.now();
   try{
-    const tokenRes=await fetch("/api/token",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+authToken},body:JSON.stringify({scenario:$("scenario").value})});
-    const token=await tokenRes.json();if(!tokenRes.ok)throw new Error(token.error||"Backend indisponible");
-    pc=new RTCPeerConnection();const audio=document.createElement("audio");audio.autoplay=true;audio.hidden=true;document.body.appendChild(audio);pc.ontrack=e=>audio.srcObject=e.streams[0];
-    mic=await navigator.mediaDevices.getUserMedia({audio:true});pc.addTrack(mic.getTracks()[0]);
+    pc=new RTCPeerConnection();
+    const audio=document.createElement("audio");audio.autoplay=true;audio.hidden=true;document.body.appendChild(audio);
+    pc.ontrack=e=>audio.srcObject=e.streams[0];
+    pc.onconnectionstatechange=()=>{if(pc&&(pc.connectionState==="failed"||pc.connectionState==="disconnected"))$("status").textContent="⚠️ Connexion vocale interrompue."};
+    mic=await navigator.mediaDevices.getUserMedia({audio:true});
+    pc.addTrack(mic.getTracks()[0]);
     dc=pc.createDataChannel("oai-events");
     dc.onopen=()=>{$("status").textContent="🟢 Simulation active — parle naturellement au vendeur.";dc.send(JSON.stringify({type:"response.create"}));};
     dc.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch{return}
-      if(m.type==="conversation.item.input_audio_transcription.completed"&&m.transcript){addTranscript("me",m.transcript)}
-      if(m.type==="response.output_audio_transcript.done"&&m.transcript){addTranscript("ai",m.transcript)}
-      if(m.type==="response.output_text.done"&&m.text&&!m.transcript){addTranscript("ai",m.text)}
+      if(m.type==="conversation.item.input_audio_transcription.completed"&&m.transcript)addTranscript("me",m.transcript);
+      if(m.type==="response.output_audio_transcript.done"&&m.transcript)addTranscript("ai",m.transcript);
+      if(m.type==="response.output_text.done"&&m.text&&!m.transcript)addTranscript("ai",m.text);
+      if(m.type==="error")$("status").textContent="⚠️ "+(m.error?.message||"Erreur Realtime");
     };
     const offer=await pc.createOffer();await pc.setLocalDescription(offer);
-    const sdp=await fetch("https://api.openai.com/v1/realtime/calls",{method:"POST",body:offer.sdp,headers:{"Authorization":"Bearer "+token.value,"Content-Type":"application/sdp"}});
-    if(!sdp.ok)throw new Error("Connexion WebRTC refusée");
-    await pc.setRemoteDescription({type:"answer",sdp:await sdp.text()});running=true;
-  }catch(e){$("status").textContent="⚠️ "+e.message;$("start").disabled=false;$("stop").disabled=true}
+    const sdp=await fetch("/api/realtime?scenario="+encodeURIComponent($("scenario").value),{
+      method:"POST",
+      headers:{"Content-Type":"application/sdp","Authorization":"Bearer "+authToken},
+      body:offer.sdp
+    });
+    const answerText=await sdp.text();
+    if(!sdp.ok)throw new Error("WebRTC refusé : "+answerText.slice(0,220));
+    await pc.setRemoteDescription({type:"answer",sdp:answerText});
+    running=true;
+  }catch(e){
+    if(pc)pc.close();if(mic)mic.getTracks().forEach(t=>t.stop());pc=dc=mic=null;
+    $("status").textContent="⚠️ "+e.message;$("start").disabled=false;$("stop").disabled=true;
+  }
 }
 function stop(){if(dc)dc.close();if(pc)pc.close();if(mic)mic.getTracks().forEach(t=>t.stop());pc=dc=mic=null;running=false;$("start").disabled=false;$("stop").disabled=true;$("status").textContent="Simulation terminée. Analyse en cours…";analyze()}
 async function analyze(){
  const t=transcript.map(x=>(x.who==="ai"?"VENDEUR":"AGENT")+": "+x.text).join("\n");
  if(!t){$("status").textContent="Simulation terminée.";return}
- try{const r=await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+authToken},body:JSON.stringify({transcript:t})});const a=await r.json();
+ try{const r=await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+localStorage.getItem("jml_token")},body:JSON.stringify({transcript:t})});const a=await r.json();
  if(localStorage.getItem("jml_token")){await fetch("/api/session",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+localStorage.getItem("jml_token")},body:JSON.stringify({scenario:$("scenario").value,duration_seconds:Math.round((Date.now()-startedAt)/1000),score:a.score_global,transcript:t})}).catch(()=>{});}$("analysis").innerHTML='<div class="analysis"><div class="metric"><b>Score global</b><strong>'+((a.score_global??"—"))+'/100</strong></div><div class="metric"><b>Questionnement</b><strong>'+((a.questionnement??"—"))+'/10</strong></div><div class="metric"><b>Empathie</b><strong>'+((a.empathie??"—"))+'/10</strong></div></div><div class="card" style="margin-top:12px"><b>Points forts</b><ul>'+((a.points_forts||[]).map(x=>'<li>'+escapeHtml(x)+'</li>').join(""))+'</ul><b>À améliorer</b><ul>'+((a.axes_amelioration||[]).map(x=>'<li>'+escapeHtml(x)+'</li>').join(""))+'</ul><p><b>Question recommandée :</b> '+escapeHtml(a.meilleure_question||"—")+'</p><p><b>Conseil :</b> '+escapeHtml(a.conseil||"—")+'</p></div>';$("status").textContent="Analyse terminée."}catch(e){$("status").textContent="Analyse indisponible : "+e.message}
 }
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
