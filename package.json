@@ -1,14 +1,17 @@
 {
-  "name":"jml-objections-ai",
-  "version":"2.1.0",
-  "private":true,
-  "type":"module",
-  "scripts":{"start":"node server.js"},
-  "dependencies":{
-    "bcryptjs":"^3.0.2",
-    "express":"^5.1.0",
-    "jsonwebtoken":"^9.0.2",
-    "openai":"^6.0.0",
-    "pg":"^8.16.3"
+  "name": "jml-objections-ai",
+  "version": "2.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "openai": "^6.0.0",
+    "pg": "^8.16.3",
+    "stripe": "^18.5.0"
   }
 }
