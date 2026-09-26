@@ -31,7 +31,8 @@ app.get("/api/health",(req,res)=>res.json({ok:true,service:"jml-objections-ai",v
 
 app.post("/api/token",auth,async(req,res)=>{
   try{
-    const quota=await canStart(req.user.sub);\n    const scenario=String(req.body?.scenario||"commission");
+    const quota=await canStart(req.user.sub);
+    const scenario=String(req.body?.scenario||"commission");
     const s=scenarios[scenario]||scenarios.commission;
     const instructions=[
       "Tu es un propriétaire vendeur français dans une simulation d'entraînement commercial immobilier.",
@@ -71,7 +72,7 @@ app.post("/api/token",auth,async(req,res)=>{
   }
 });
 
-app.post("/api/analyze",async(req,res)=>{
+app.post("/api/analyze",auth,async(req,res)=>{
   try{
     const transcript=String(req.body?.transcript||"").trim();
     if(!transcript) return res.status(400).json({error:"Transcript vide."});
