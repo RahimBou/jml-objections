@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: jml-objections
+    runtime: static
+    buildCommand: ""
+    staticPublishPath: .
+    pullRequestPreviewsEnabled: true
