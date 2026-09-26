@@ -15,12 +15,12 @@
 <div id="analysis"></div>
 </section></main>
 <script>
-let pc=null,dc=null,mic=null,transcript=[],running=false;
+let pc=null,dc=null,mic=null,transcript=[],running=false,startedAt=0;
 const $=id=>document.getElementById(id);
 function addBubble(who,text){const d=document.createElement("div");d.className="bubble "+(who==="me"?"me":"ai");d.textContent=text;$("chat").appendChild(d);$("chat").scrollTop=$("chat").scrollHeight}
 function addTranscript(who,text){transcript.push({who,text});addBubble(who,text)}
 async function start(){
-  $("start").disabled=true;$("stop").disabled=false;$("status").textContent="Connexion au coach IA…";$("chat").innerHTML="";
+  $("start").disabled=true;$("stop").disabled=false;$("status").textContent="Connexion au coach IA…";$("chat").innerHTML="";startedAt=Date.now();
   try{
     const tokenRes=await fetch("/api/token",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scenario:$("scenario").value})});
     const token=await tokenRes.json();if(!tokenRes.ok)throw new Error(token.error||"Backend indisponible");
@@ -42,7 +42,8 @@ function stop(){if(dc)dc.close();if(pc)pc.close();if(mic)mic.getTracks().forEach
 async function analyze(){
  const t=transcript.map(x=>(x.who==="ai"?"VENDEUR":"AGENT")+": "+x.text).join("\n");
  if(!t){$("status").textContent="Simulation terminée.";return}
- try{const r=await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({transcript:t})});const a=await r.json();$("analysis").innerHTML='<div class="analysis"><div class="metric"><b>Score global</b><strong>'+((a.score_global??"—"))+'/100</strong></div><div class="metric"><b>Questionnement</b><strong>'+((a.questionnement??"—"))+'/10</strong></div><div class="metric"><b>Empathie</b><strong>'+((a.empathie??"—"))+'/10</strong></div></div><div class="card" style="margin-top:12px"><b>Points forts</b><ul>'+((a.points_forts||[]).map(x=>'<li>'+escapeHtml(x)+'</li>').join(""))+'</ul><b>À améliorer</b><ul>'+((a.axes_amelioration||[]).map(x=>'<li>'+escapeHtml(x)+'</li>').join(""))+'</ul><p><b>Question recommandée :</b> '+escapeHtml(a.meilleure_question||"—")+'</p><p><b>Conseil :</b> '+escapeHtml(a.conseil||"—")+'</p></div>';$("status").textContent="Analyse terminée."}catch(e){$("status").textContent="Analyse indisponible : "+e.message}
+ try{const r=await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({transcript:t})});const a=await r.json();
+ if(localStorage.getItem("jml_token")){await fetch("/api/session",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+localStorage.getItem("jml_token")},body:JSON.stringify({scenario:$("scenario").value,duration_seconds:Math.round((Date.now()-startedAt)/1000),score:a.score_global,transcript:t})}).catch(()=>{});}$("analysis").innerHTML='<div class="analysis"><div class="metric"><b>Score global</b><strong>'+((a.score_global??"—"))+'/100</strong></div><div class="metric"><b>Questionnement</b><strong>'+((a.questionnement??"—"))+'/10</strong></div><div class="metric"><b>Empathie</b><strong>'+((a.empathie??"—"))+'/10</strong></div></div><div class="card" style="margin-top:12px"><b>Points forts</b><ul>'+((a.points_forts||[]).map(x=>'<li>'+escapeHtml(x)+'</li>').join(""))+'</ul><b>À améliorer</b><ul>'+((a.axes_amelioration||[]).map(x=>'<li>'+escapeHtml(x)+'</li>').join(""))+'</ul><p><b>Question recommandée :</b> '+escapeHtml(a.meilleure_question||"—")+'</p><p><b>Conseil :</b> '+escapeHtml(a.conseil||"—")+'</p></div>';$("status").textContent="Analyse terminée."}catch(e){$("status").textContent="Analyse indisponible : "+e.message}
 }
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 $("start").onclick=start;$("stop").onclick=stop;$("send").onclick=()=>{const v=$("reply").value.trim();if(!v)return;addTranscript("me",v);$("reply").value="";$("status").textContent="Mode texte de test : pour la vraie réponse IA vocale, démarre une simulation."};
