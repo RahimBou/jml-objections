@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import OpenAI from "openai";
-import {initDb,auth,register,login,me,saveSession} from "./auth.js";
+import {initDb,auth,register,login,me,saveSession,canStart} from "./auth.js";
 
 const __dirname=path.dirname(fileURLToPath(import.meta.url));
 const app=express();
@@ -29,9 +29,9 @@ function safetyId(req){
 
 app.get("/api/health",(req,res)=>res.json({ok:true,service:"jml-objections-ai",version:"2.0.0"}));
 
-app.post("/api/token",async(req,res)=>{
+app.post("/api/token",auth,async(req,res)=>{
   try{
-    const scenario=String(req.body?.scenario||"commission");
+    const quota=await canStart(req.user.sub);\n    const scenario=String(req.body?.scenario||"commission");
     const s=scenarios[scenario]||scenarios.commission;
     const instructions=[
       "Tu es un propriétaire vendeur français dans une simulation d'entraînement commercial immobilier.",
@@ -64,7 +64,7 @@ app.post("/api/token",async(req,res)=>{
     });
     const data=await response.json();
     if(!response.ok) return res.status(response.status).json({error:data});
-    res.json(data);
+    res.json({...data,quota:{remaining_seconds:quota.remaining}});
   }catch(err){
     console.error(err);
     res.status(500).json({error:"Impossible de créer la session IA."});
