@@ -3,13 +3,16 @@ import crypto from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import OpenAI from "openai";
-import {initDb,auth,register,login,me,saveSession,canStart} from "./auth.js";
+import Stripe from "stripe";
+import {initDb,auth,register,login,me,saveSession,canStart,setPlan} from "./auth.js";
 
 const __dirname=path.dirname(fileURLToPath(import.meta.url));
 const app=express();
 const port=process.env.PORT||10000;
 const client=new OpenAI({apiKey:process.env.OPENAI_API_KEY});
+const stripe=process.env.STRIPE_SECRET_KEY?new Stripe(process.env.STRIPE_SECRET_KEY):null;
 
+app.use("/api/billing/webhook",express.raw({type:"application/json"}));
 app.use(express.json({limit:"200kb"}));
 app.use(express.static(__dirname));
 
@@ -105,5 +108,37 @@ app.post("/api/register",async(req,res)=>{try{if(!process.env.JWT_SECRET)throw n
 app.post("/api/login",async(req,res)=>{try{if(!process.env.JWT_SECRET)throw new Error("JWT_SECRET manquante");res.json(await login(String(req.body?.email||""),String(req.body?.password||"")));}catch(e){res.status(401).json({error:e.message});}});
 app.get("/api/me",auth,async(req,res)=>{try{res.json(await me(req.user.sub));}catch(e){res.status(400).json({error:e.message});}});
 app.post("/api/session",auth,async(req,res)=>{try{res.json(await saveSession(req.user.sub,req.body||{}));}catch(e){res.status(400).json({error:e.message});}});
+app.post("/api/billing/checkout",auth,async(req,res)=>{
+  try{
+    if(!stripe||!process.env.STRIPE_PRICE_PRO)throw new Error("Paiement Pro pas encore configuré.");
+    if(req.body?.plan!=="pro")throw new Error("Ce plan n'est pas encore disponible en paiement automatique.");
+    const account=await me(req.user.sub);
+    const session=await stripe.checkout.sessions.create({
+      mode:"subscription",
+      line_items:[{price:process.env.STRIPE_PRICE_PRO,quantity:1}],
+      customer_email:account.user.email,
+      metadata:{user_id:req.user.sub,plan:"pro"},
+      success_url:(process.env.APP_URL||"http://localhost:10000")+"/account.html?billing=success",
+      cancel_url:(process.env.APP_URL||"http://localhost:10000")+"/pricing.html?billing=cancel"
+    });
+    res.json({url:session.url});
+  }catch(e){res.status(400).json({error:e.message});}
+});
+app.post("/api/billing/webhook",async(req,res)=>{
+  try{
+    if(!stripe||!process.env.STRIPE_WEBHOOK_SECRET)return res.status(503).send("Webhook non configuré");
+    const sig=req.headers["stripe-signature"];
+    const event=stripe.webhooks.constructEvent(req.body,sig,process.env.STRIPE_WEBHOOK_SECRET);
+    if(event.type==="checkout.session.completed"){
+      const s=event.data.object;
+      if(s.metadata?.user_id)await setPlan(s.metadata.user_id,s.metadata.plan||"pro");
+    }
+    if(event.type==="customer.subscription.deleted"){
+      const s=event.data.object;
+      if(s.metadata?.user_id)await setPlan(s.metadata.user_id,"free");
+    }
+    res.json({received:true});
+  }catch(e){res.status(400).send("Webhook error");}
+});
 
 initDb().then(()=>app.listen(port,()=>console.log("JML Objections AI listening on "+port))).catch(err=>{console.error("Database initialization failed",err);process.exit(1);});
