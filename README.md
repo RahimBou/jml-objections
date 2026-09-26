@@ -54,3 +54,25 @@ La base est préparée pour évoluer vers un SaaS :
 7. Scénarios personnalisés
 
 Les limites d'utilisation seront importantes pour contrôler le coût IA avant toute commercialisation.
+
+
+## V2.1 — Base SaaS
+- Comptes email + mot de passe
+- Historique des simulations
+- Quotas mensuels
+- Page offres
+- Préparation du paiement récurrent Stripe
+- Plan Free : 15 minutes/mois
+- Plan Pro : 300 minutes/mois
+- Plan Agency : structure prévue pour l'espace équipe
+
+### Variables du Web Service Render
+- OPENAI_API_KEY
+- DATABASE_URL
+- JWT_SECRET
+- STRIPE_SECRET_KEY
+- STRIPE_PRICE_PRO
+- STRIPE_WEBHOOK_SECRET
+- APP_URL
+
+Le paiement reste désactivé tant que les variables Stripe ne sont pas configurées. Ne jamais placer une clé secrète dans les fichiers HTML.
