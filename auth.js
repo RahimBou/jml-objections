@@ -78,3 +78,5 @@ export async function saveSession(id,{scenario,duration_seconds,score,transcript
   await pool.query("UPDATE users SET monthly_seconds=monthly_seconds+$1 WHERE id=$2",[seconds,id]);
   return me(id);
 }
+
+export async function setPlan(id,plan){requireDb();if(!["free","pro","agency"].includes(plan))throw new Error("Plan invalide.");await pool.query("UPDATE users SET plan=$1 WHERE id=$2",[plan,id]);return me(id);}
