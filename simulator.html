@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JML Objections — Simulateur IA</title>
+<style>
+:root{--bg:#f6f2e9;--card:#fffdf8;--ink:#26342d;--muted:#6c746f;--gold:#b08a45;--dark:#17352d;--line:#e6ddce}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,sans-serif}.wrap{max-width:900px;margin:auto;padding:22px}.top{display:flex;justify-content:space-between;align-items:center}.brand{font-weight:850;font-size:24px;color:var(--dark)}.brand span{color:var(--gold)}.badge{padding:7px 10px;border:1px solid var(--line);border-radius:999px;background:#fff;font-size:12px}.hero{margin-top:18px;background:var(--dark);color:white;padding:25px;border-radius:22px}.hero h1{margin:0 0 7px}.hero p{margin:0;color:#dfe7e2}.card{margin-top:18px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px}.row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1;min-width:180px}select,button{min-height:46px;border-radius:12px;padding:10px 13px;font:inherit}select{border:1px solid var(--line);background:white}.primary{border:0;background:var(--gold);color:white;font-weight:800}.secondary{border:1px solid var(--line);background:white;color:var(--dark);font-weight:700}.danger{border:0;background:#7c4b3c;color:#fff}.status{margin-top:12px;padding:12px;border-radius:12px;background:#f0ece2}.chat{margin-top:16px;min-height:240px;max-height:440px;overflow:auto;border:1px solid var(--line);border-radius:14px;padding:14px;background:white}.bubble{max-width:82%;padding:11px 13px;border-radius:14px;margin:8px 0;line-height:1.5;white-space:pre-wrap}.ai{background:#edf0ec}.me{background:#f8f0dc;margin-left:auto}.hint{color:var(--muted);font-size:13px}.analysis{margin-top:16px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.metric{border:1px solid var(--line);border-radius:14px;padding:13px}.metric b{display:block;font-size:12px;color:var(--muted)}.metric strong{font-size:25px;color:var(--dark)}ul{margin:8px 0;padding-left:20px}@media(max-width:650px){.analysis{grid-template-columns:1fr}.bubble{max-width:94%}}
+</style></head><body><main class="wrap">
+<div class="top"><div class="brand">JML <span>Objections</span></div><div class="badge">Simulateur IA V2</div></div>
+<section class="hero"><h1>🎙️ Rendez-vous vendeur avec l'IA</h1><p>L'IA joue le propriétaire. Tu réponds comme en rendez-vous réel.</p></section>
+<section class="card">
+<div class="row"><select id="scenario"><option value="commission">Commission trop élevée</option><option value="seul">Vendre seul</option><option value="prix">Prix trop élevé</option><option value="exclusif">Mandat exclusif</option><option value="concurrence">Agence concurrente</option><option value="reflexion">Je veux réfléchir</option></select><button class="primary" id="start">Démarrer la simulation</button><button class="danger" id="stop" disabled>Terminer</button></div>
+<div class="status" id="status">Choisis un scénario puis démarre. Le mode vocal nécessite le backend IA.</div>
+<div class="chat" id="chat"><div class="hint">La conversation apparaîtra ici.</div></div>
+<div class="row" style="margin-top:12px"><button class="secondary" id="textMode">Mode texte</button><input id="reply" placeholder="Réponse texte pour tester le scénario…" style="flex:3;min-height:46px;border:1px solid var(--line);border-radius:12px;padding:10px;font:inherit"><button class="primary" id="send">Envoyer</button></div>
+<div id="analysis"></div>
+</section></main>
+<script>
+let pc=null,dc=null,mic=null,transcript=[],running=false;
+const $=id=>document.getElementById(id);
+function addBubble(who,text){const d=document.createElement("div");d.className="bubble "+(who==="me"?"me":"ai");d.textContent=text;$("chat").appendChild(d);$("chat").scrollTop=$("chat").scrollHeight}
+function addTranscript(who,text){transcript.push({who,text});addBubble(who,text)}
+async function start(){
+  $("start").disabled=true;$("stop").disabled=false;$("status").textContent="Connexion au coach IA…";$("chat").innerHTML="";
+  try{
+    const tokenRes=await fetch("/api/token",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scenario:$("scenario").value})});
+    const token=await tokenRes.json();if(!tokenRes.ok)throw new Error(token.error||"Backend indisponible");
+    pc=new RTCPeerConnection();const audio=document.createElement("audio");audio.autoplay=true;audio.hidden=true;document.body.appendChild(audio);pc.ontrack=e=>audio.srcObject=e.streams[0];
+    mic=await navigator.mediaDevices.getUserMedia({audio:true});pc.addTrack(mic.getTracks()[0]);
+    dc=pc.createDataChannel("oai-events");
+    dc.onopen=()=>{$("status").textContent="🟢 Simulation active — parle naturellement au vendeur.";dc.send(JSON.stringify({type:"response.create"}));};
+    dc.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch{return}
+      if(m.type==="response.output_audio_transcript.done"&&m.transcript){addTranscript("ai",m.transcript)}
+      if(m.type==="response.output_text.done"&&m.text&&!m.transcript){addTranscript("ai",m.text)}
+    };
+    const offer=await pc.createOffer();await pc.setLocalDescription(offer);
+    const sdp=await fetch("https://api.openai.com/v1/realtime/calls",{method:"POST",body:offer.sdp,headers:{"Authorization":"Bearer "+token.value,"Content-Type":"application/sdp"}});
+    if(!sdp.ok)throw new Error("Connexion WebRTC refusée");
+    await pc.setRemoteDescription({type:"answer",sdp:await sdp.text()});running=true;
+  }catch(e){$("status").textContent="⚠️ "+e.message;$("start").disabled=false;$("stop").disabled=true}
+}
+function stop(){if(dc)dc.close();if(pc)pc.close();if(mic)mic.getTracks().forEach(t=>t.stop());pc=dc=mic=null;running=false;$("start").disabled=false;$("stop").disabled=true;$("status").textContent="Simulation terminée. Analyse en cours…";analyze()}
+async function analyze(){
+ const t=transcript.map(x=>(x.who==="ai"?"VENDEUR":"AGENT")+": "+x.text).join("\n");
+ if(!t){$("status").textContent="Simulation terminée.";return}
+ try{const r=await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({transcript:t})});const a=await r.json();$("analysis").innerHTML='<div class="analysis"><div class="metric"><b>Score global</b><strong>'+((a.score_global??"—"))+'/100</strong></div><div class="metric"><b>Questionnement</b><strong>'+((a.questionnement??"—"))+'/10</strong></div><div class="metric"><b>Empathie</b><strong>'+((a.empathie??"—"))+'/10</strong></div></div><div class="card" style="margin-top:12px"><b>Points forts</b><ul>'+((a.points_forts||[]).map(x=>'<li>'+escapeHtml(x)+'</li>').join(""))+'</ul><b>À améliorer</b><ul>'+((a.axes_amelioration||[]).map(x=>'<li>'+escapeHtml(x)+'</li>').join(""))+'</ul><p><b>Question recommandée :</b> '+escapeHtml(a.meilleure_question||"—")+'</p><p><b>Conseil :</b> '+escapeHtml(a.conseil||"—")+'</p></div>';$("status").textContent="Analyse terminée."}catch(e){$("status").textContent="Analyse indisponible : "+e.message}
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+$("start").onclick=start;$("stop").onclick=stop;$("send").onclick=()=>{const v=$("reply").value.trim();if(!v)return;addTranscript("me",v);$("reply").value="";$("status").textContent="Mode texte de test : pour la vraie réponse IA vocale, démarre une simulation."};
+</script></body></html>
