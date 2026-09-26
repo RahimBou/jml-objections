@@ -57,7 +57,7 @@ app.post("/api/token",async(req,res)=>{
           type:"realtime",
           model:"gpt-realtime-2.1-mini",
           instructions,
-          audio:{output:{voice:"marin"}}
+          audio:{input:{transcription:{model:"gpt-4o-mini-transcribe",language:"fr"}},output:{voice:"marin"}}
         }
       })
     });
