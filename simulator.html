@@ -31,7 +31,8 @@ async function start(){
     dc=pc.createDataChannel("oai-events");
     dc.onopen=()=>{$("status").textContent="🟢 Simulation active — parle naturellement au vendeur.";dc.send(JSON.stringify({type:"response.create"}));};
     dc.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch{return}
-      if(m.type==="conversation.item.input_audio_transcription.completed"&&m.transcript){addTranscript("me",m.transcript)}\n      if(m.type==="response.output_audio_transcript.done"&&m.transcript){addTranscript("ai",m.transcript)}
+      if(m.type==="conversation.item.input_audio_transcription.completed"&&m.transcript){addTranscript("me",m.transcript)}
+      if(m.type==="response.output_audio_transcript.done"&&m.transcript){addTranscript("ai",m.transcript)}
       if(m.type==="response.output_text.done"&&m.text&&!m.transcript){addTranscript("ai",m.text)}
     };
     const offer=await pc.createOffer();await pc.setLocalDescription(offer);
