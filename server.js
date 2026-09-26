@@ -83,6 +83,46 @@ app.post("/api/realtime",auth,express.text({type:["application/sdp","text/plain"
   }
 });
 
+app.post("/api/gemini-token",auth,async(req,res)=>{
+  try{
+    const quota=await canStart(req.user.sub);
+    if(!process.env.GEMINI_API_KEY)throw new Error("GEMINI_API_KEY manquante sur Render.");
+    const scenario=String(req.body?.scenario||"commission");
+    const response=await fetch("https://generativelanguage.googleapis.com/v1beta/auth_tokens",{
+      method:"POST",
+      headers:{
+        "x-goog-api-key":process.env.GEMINI_API_KEY,
+        "Content-Type":"application/json"
+      },
+      body:JSON.stringify({
+        uses:1,
+        expireTime:new Date(Date.now()+30*60*1000).toISOString(),
+        newSessionExpireTime:new Date(Date.now()+60*1000).toISOString(),
+        liveConnectConstraints:{
+          model:"models/gemini-3.8-live",
+          config:{
+            responseModalities:["AUDIO"],
+            inputAudioTranscription:{languageCodes:["fr-FR"]},
+            outputAudioTranscription:{languageCodes:["fr-FR"]},
+            speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:"Kore"}}},
+            systemInstruction:{parts:[{text:sellerInstructions(scenario)}]},
+            sessionResumption:{}
+          }
+        }
+      })
+    });
+    const data=await response.json();
+    if(!response.ok){
+      console.error("Gemini token error",response.status,JSON.stringify(data));
+      return res.status(response.status).json({error:data});
+    }
+    res.json({token:data.name,model:"gemini-3.8-live",quota:{remaining_seconds:quota.remaining}});
+  }catch(err){
+    console.error("Gemini token error",err);
+    res.status(500).json({error:err.message||"Impossible de créer la session Gemini."});
+  }
+});
+
 app.post("/api/token",auth,async(req,res)=>{
   try{
     const quota=await canStart(req.user.sub);
@@ -130,6 +170,7 @@ app.post("/api/analyze",auth,async(req,res)=>{
   try{
     const transcript=String(req.body?.transcript||"").trim();
     if(!transcript) return res.status(400).json({error:"Transcript vide."});
+    if(!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY manquante sur Render.");
     const prompt=[
       "Tu es un coach commercial immobilier français.",
       "Analyse cette simulation entre un agent commercial et un propriétaire vendeur.",
@@ -139,19 +180,24 @@ app.post("/api/analyze",auth,async(req,res)=>{
       "Sois concret et exigeant. N'invente pas ce qui n'apparaît pas dans la conversation.",
       "TRANSCRIPTION:\n"+transcript.slice(0,18000)
     ].join("\n");
-
-    const r=await client.responses.create({
-      model:"gpt-5-mini",
-      input:prompt
+    const response=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key="+encodeURIComponent(process.env.GEMINI_API_KEY),{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        contents:[{role:"user",parts:[{text:prompt}]}],
+        generationConfig:{responseMimeType:"application/json",temperature:0.2}
+      })
     });
-    const text=r.output_text||"";
+    const data=await response.json();
+    if(!response.ok) throw new Error(data?.error?.message||"Erreur Gemini.");
+    const text=data?.candidates?.[0]?.content?.parts?.map(p=>p.text||"").join("")||"";
     let parsed;
-    try{ parsed=JSON.parse(text); }
-    catch{ parsed={score_global:null,conseil:text,points_forts:[],axes_amelioration:[]}; }
+    try{parsed=JSON.parse(text);}
+    catch{parsed={score_global:null,conseil:text,points_forts:[],axes_amelioration:[]};}
     res.json(parsed);
   }catch(err){
-    console.error(err);
-    res.status(500).json({error:"Analyse impossible pour le moment."});
+    console.error("Gemini analyze error",err);
+    res.status(500).json({error:"Analyse impossible pour le moment.",detail:err.message});
   }
 });
 
