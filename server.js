@@ -28,7 +28,7 @@ function safetyId(req){
   return crypto.createHash("sha256").update(raw).digest("hex").slice(0,32);
 }
 
-app.get("/api/health",(req,res)=>res.json({ok:true,service:"jml-objections-ai",version:"2.1.0"}));
+app.get("/api/health",(req,res)=>res.json({ok:true,service:"jml-objections-ai",version:"2.2.0"}));
 
 function sellerInstructions(scenario){
   const s=scenarios[scenario]||scenarios.commission;
