@@ -50,6 +50,14 @@ export async function login(email,password){
   if(!q.rowCount||!(await bcrypt.compare(password,q.rows[0].password_hash)))throw new Error("Email ou mot de passe incorrect.");
   const u=q.rows[0];return {token:sign(u),user:{id:u.id,email:u.email,plan:u.plan}};
 }
+export async function canStart(id){
+  requireDb();
+  const q=await pool.query("SELECT plan,monthly_seconds,month_key FROM users WHERE id=$1",[id]);
+  if(!q.rowCount)throw new Error("Compte introuvable.");
+  const u=q.rows[0],key=monthKey(),used=u.month_key===key?u.monthly_seconds:0,limit=plans[u.plan]?.seconds??plans.free.seconds;
+  if(used>=limit)throw new Error("Quota mensuel atteint. Passe au plan supérieur.");
+  return {plan:u.plan,used,limit,remaining:limit-used};
+}
 export async function me(id){
   requireDb();const q=await pool.query("SELECT id,email,plan,monthly_seconds,month_key FROM users WHERE id=$1",[id]);
   if(!q.rowCount)throw new Error("Compte introuvable.");
