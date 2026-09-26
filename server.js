@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import OpenAI from "openai";
+import {initDb,auth,register,login,me,saveSession} from "./auth.js";
 
 const __dirname=path.dirname(fileURLToPath(import.meta.url));
 const app=express();
@@ -99,4 +100,9 @@ app.post("/api/analyze",async(req,res)=>{
   }
 });
 
-app.listen(port,()=>console.log("JML Objections AI listening on "+port));
+app.post("/api/register",async(req,res)=>{try{if(!process.env.JWT_SECRET)throw new Error("JWT_SECRET manquante");res.json(await register(String(req.body?.email||""),String(req.body?.password||"")));}catch(e){res.status(400).json({error:e.message});}});
+app.post("/api/login",async(req,res)=>{try{if(!process.env.JWT_SECRET)throw new Error("JWT_SECRET manquante");res.json(await login(String(req.body?.email||""),String(req.body?.password||"")));}catch(e){res.status(401).json({error:e.message});}});
+app.get("/api/me",auth,async(req,res)=>{try{res.json(await me(req.user.sub));}catch(e){res.status(400).json({error:e.message});}});
+app.post("/api/session",auth,async(req,res)=>{try{res.json(await saveSession(req.user.sub,req.body||{}));}catch(e){res.status(400).json({error:e.message});}});
+
+initDb().then(()=>app.listen(port,()=>console.log("JML Objections AI listening on "+port))).catch(err=>{console.error("Database initialization failed",err);process.exit(1);});
