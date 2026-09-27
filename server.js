@@ -96,17 +96,6 @@ app.post("/api/gemini-token",auth,async(req,res)=>{
         uses:1,
         expireTime:new Date(Date.now()+30*60*1000).toISOString(),
         newSessionExpireTime:new Date(Date.now()+60*1000).toISOString(),
-        liveConnectConstraints:{
-          model:"models/gemini-3.8-live",
-          config:{
-            responseModalities:["AUDIO"],
-            inputAudioTranscription:{languageCodes:["fr-FR"]},
-            outputAudioTranscription:{languageCodes:["fr-FR"]},
-            speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:"Kore"}}},
-            systemInstruction:{parts:[{text:sellerInstructions(scenario)}]},
-            sessionResumption:{}
-          }
-        }
       })
     });
     const data=await response.json();
