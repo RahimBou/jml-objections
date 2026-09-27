@@ -40,7 +40,7 @@ async function start(){
   try{
     const r=await fetch("/api/gemini-token",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+authToken},body:JSON.stringify({scenario:$("scenario").value})});
     const data=await r.json();if(!r.ok)throw new Error(data?.error?.error?.message||data?.error||"Impossible d'obtenir le jeton Gemini.");
-    ws=new WebSocket("wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?access_token="+encodeURIComponent(data.token));
+    ws=new WebSocket("wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token="+encodeURIComponent(data.token));
     audioContext=new (window.AudioContext||window.webkitAudioContext)();await audioContext.resume();playbackTime=audioContext.currentTime;
     ws.onopen=()=>{
       ws.send(JSON.stringify({setup:{
@@ -114,6 +114,6 @@ async function analyze(){
  }catch(e){$("status").textContent="Analyse indisponible : "+e.message}
 }
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
-$("start").onclick=start;$("stop").onclick=stop;
+window.addEventListener("DOMContentLoaded",function(){\n  $("start").addEventListener("click",start);\n  $("stop").addEventListener("click",stop);\n  $("send").addEventListener("click",function(){const v=$("reply").value.trim();if(!v)return;addTranscript("me",v);$("reply").value="";if(ws&&ws.readyState===WebSocket.OPEN)sendText(v);else $("status").textContent="Mode texte : démarre d’abord la simulation Gemini.";});\n});
 $("send").onclick=()=>{const v=$("reply").value.trim();if(!v)return;addTranscript("me",v);$("reply").value="";if(ws&&ws.readyState===WebSocket.OPEN)sendText(v);else $("status").textContent="Mode texte : démarre d'abord la simulation Gemini."};
 </script></body></html>
