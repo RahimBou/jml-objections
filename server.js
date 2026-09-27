@@ -96,6 +96,15 @@ app.post("/api/gemini-token",auth,async(req,res)=>{
         uses:1,
         expireTime:new Date(Date.now()+30*60*1000).toISOString(),
         newSessionExpireTime:new Date(Date.now()+60*1000).toISOString(),
+        bidiGenerateContentSetup:{
+          model:"models/gemini-3.8-live",
+          generationConfig:{
+            responseModalities:["AUDIO"],
+            speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:"Kore"}}}
+          },
+          systemInstruction:{parts:[{text:sellerInstructions(scenario)}]},
+          sessionResumption:{}
+        }
       })
     });
     const data=await response.json();
