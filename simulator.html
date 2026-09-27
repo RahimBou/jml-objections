@@ -114,6 +114,16 @@ async function analyze(){
  }catch(e){$("status").textContent="Analyse indisponible : "+e.message}
 }
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
-window.addEventListener("DOMContentLoaded",function(){\n  $("start").addEventListener("click",start);\n  $("stop").addEventListener("click",stop);\n  $("send").addEventListener("click",function(){const v=$("reply").value.trim();if(!v)return;addTranscript("me",v);$("reply").value="";if(ws&&ws.readyState===WebSocket.OPEN)sendText(v);else $("status").textContent="Mode texte : démarre d’abord la simulation Gemini.";});\n});
-$("send").onclick=()=>{const v=$("reply").value.trim();if(!v)return;addTranscript("me",v);$("reply").value="";if(ws&&ws.readyState===WebSocket.OPEN)sendText(v);else $("status").textContent="Mode texte : démarre d'abord la simulation Gemini."};
+window.addEventListener("DOMContentLoaded",function(){
+  $("start").addEventListener("click",start);
+  $("stop").addEventListener("click",stop);
+  $("send").addEventListener("click",function(){
+    const v=$("reply").value.trim();
+    if(!v)return;
+    addTranscript("me",v);
+    $("reply").value="";
+    if(ws&&ws.readyState===WebSocket.OPEN)sendText(v);
+    else $("status").textContent="Mode texte : démarre d'abord la simulation Gemini.";
+  });
+});
 </script></body></html>
